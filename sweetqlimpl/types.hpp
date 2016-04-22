@@ -1,9 +1,11 @@
 #pragma once
 
 #include <vector>
+#include <functional>
 #include <string>
 #include <ostream>
 #include <type_traits>
+#include <cstring>
 
 enum class SweetqlFlags {
 	NotPrimaryKey = 0,
@@ -31,6 +33,17 @@ inline std::ostream& operator<<(std::ostream& out, const SweetqlTypes& t) {
 
 typedef void(*del)(void*);
 
+template<class T>
+using BlobGetterFunc = std::function<const void*(const T&)>;
+template<class T>
+using BlobSetterFunc = std::function<void(T&,const void*,size_t)>;
+template<class T>
+using SizeGetterFunc = std::function<size_t(const T&)>;
+template<class T>
+using StringGetterFunc = std::function<std::string(const T&)>;
+template<class T>
+using StringSetterFunc = std::function<void(T&,const char*)>;
+
 template<typename T>
 class SqlAttribute {
 public:
@@ -51,7 +64,7 @@ public:
 	inline virtual std::string getString(const T&) const { 
 		throw std::logic_error("getString not implemented"); 
 	}
-	inline virtual void* getBlob(const T&) const { 
+	inline virtual const void* getBlob(const T&) const { 
 		throw std::logic_error("getBlob not implemented"); 
 	}
 	inline virtual size_t getBlobSize(const T&) const { 
@@ -66,9 +79,9 @@ public:
 	inline virtual void setFloat(T&,double) {
 		throw std::logic_error("setFloat not implemented"); 
 	}
-	inline virtual void setString(T&,const std::string&) {
-		throw std::logic_error("setString not implemented"); 
-	}
+	//inline virtual void setString(T&,const std::string&) {
+		//throw std::logic_error("setString not implemented"); 
+	//}
 	inline virtual void setString(T&,const char*) {
 		throw std::logic_error("setString not implemented"); 
 	}
@@ -81,6 +94,7 @@ public:
 		case SweetqlTypes::String: return "varchar";
 		case SweetqlTypes::Int: return "integer";
 		case SweetqlTypes::Float: return "real";
+		case SweetqlTypes::Blob: return "blob";
 		default: 
 			throw std::logic_error(std::string("wroong type for getType"));
 		}
@@ -98,30 +112,33 @@ inline bool isPrimaryKey(SweetqlFlags flags) {
 template<typename T>
 class SqlStringAttribute : public SqlAttribute<T> {
 public:
-	inline SqlStringAttribute(std::string T::* s) : SqlAttribute<T>(SweetqlTypes::String), 
-		str(s) {}
+	inline SqlStringAttribute(StringGetterFunc<T> sgf, StringSetterFunc<T> ssf) : 
+		SqlAttribute<T>(SweetqlTypes::String), 
+		sgf(sgf), ssf(ssf)
+	{}
 
-	inline SqlStringAttribute(std::string T::* s, SweetqlFlags f) : 
-		SqlAttribute<T>(SweetqlTypes::String, f), str(s) {}
+	inline SqlStringAttribute(StringGetterFunc<T> sgf, StringSetterFunc<T> ssf, 
+			SweetqlFlags f) : 
+		SqlAttribute<T>(SweetqlTypes::String, f), 
+		sgf(sgf), ssf(ssf)
+	{}
 
 	inline std::string getString(const T& t) const { 
-		return t.*str;
-	}
-	inline void setString(T& t,const std::string& s) {
-		t.*str = s;
+		return sgf(t);
 	}
 	inline void setString(T& t,const char* s) {
-		t.*str = s;
+		ssf(t, s);
 	}
 private:
-	std::string T::* str;
+	StringGetterFunc<T> sgf;
+	StringSetterFunc<T> ssf;
 };
 
-template<typename T>
+template<typename T, typename U>
 class SqlIntAttribute : public SqlAttribute<T> {
 public:
-	inline SqlIntAttribute(int64_t T::* i) : SqlAttribute<T>(SweetqlTypes::Int), integer(i) {}
-	inline SqlIntAttribute(int64_t T::* i, SweetqlFlags f) : 
+	inline SqlIntAttribute(U T::* i) : SqlAttribute<T>(SweetqlTypes::Int), integer(i) {}
+	inline SqlIntAttribute(U T::* i, SweetqlFlags f) : 
 		SqlAttribute<T>(SweetqlTypes::Int, f), integer(i) {}
 
 	inline int64_t getInt(const T& t) const { 
@@ -131,14 +148,14 @@ public:
 		t.*integer = i;
 	}
 private:
-	int64_t T::* integer;
+	U T::* integer;
 };
 
-template<typename T>
+template<typename T, typename U>
 class SqlFloatAttribute : public SqlAttribute<T> {
 public:
-	inline SqlFloatAttribute(double T::* i) : SqlAttribute<T>(SweetqlTypes::Float), fl(i) {}
-	inline SqlFloatAttribute(double T::* i, SweetqlFlags f) : 
+	inline SqlFloatAttribute(U T::* i) : SqlAttribute<T>(SweetqlTypes::Float), fl(i) {}
+	inline SqlFloatAttribute(U T::* i, SweetqlFlags f) : 
 		SqlAttribute<T>(SweetqlTypes::Float, f), fl(i) {}
 
 	inline double getFloat(const T& t) const { 
@@ -148,25 +165,69 @@ public:
 		t.*fl = i;
 	}
 private:
-	double T::* fl;
+	U T::* fl;
+};
+
+template<typename T/*, typename U*/>
+class SqlBlobAttribute : public SqlAttribute<T> {
+public:
+	inline SqlBlobAttribute(SizeGetterFunc<T> sgf,
+			BlobGetterFunc<T> bgf, BlobSetterFunc<T> bsf) :
+		SqlAttribute<T>(SweetqlTypes::Blob),
+		sgf(sgf), bgf(bgf), bsf(bsf) {}
+
+	inline virtual const void* getBlob(const T& t) const { 
+		return this->bgf(t);
+	}
+	inline virtual size_t getBlobSize(const T& t) const { 
+		return this->sgf(t);
+	}
+	inline virtual del getBlobDel(const T&) const { 
+		return nullptr; // XXX use flags for this?
+	}
+	inline virtual void setBlob(T& t,const void* src,size_t count) {
+		this->bsf(t,src,count);
+	}
+private:
+	SizeGetterFunc<T> sgf;
+	BlobGetterFunc<T> bgf;
+	BlobSetterFunc<T> bsf;
 };
 
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 		typename std::enable_if<std::is_integral<S>::value, S>::type = 0) {
-	return std::make_shared<SqlIntAttribute<T>>(i);
+	return std::make_shared<SqlIntAttribute<T,S>>(i);
 }
 
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 		typename std::enable_if<std::is_floating_point<S>::value, S>::type = 0) {
-	return std::make_shared<SqlFloatAttribute<T>>(i);
+	return std::make_shared<SqlFloatAttribute<T,S>>(i);
 }
 
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 		typename std::enable_if<std::is_same<S,std::string>::value, S>::type = "") {
-	return std::make_shared<SqlStringAttribute<T>>(i);
+	static StringGetterFunc<T> sgf = [i]( const T& t ) -> std::string {
+		return t.*i;
+	};
+	static StringSetterFunc<T> ssf = [i]( const T& t, const char* s ) {
+		t.*i = s;
+	};
+	return std::make_shared<SqlStringAttribute<T>>(sgf,ssf);
+}
+
+template<typename T>
+std::shared_ptr<SqlAttribute<T>> makeStringAttr( StringGetterFunc<T> sgf,
+		StringSetterFunc<T> ssf) {
+	return std::make_shared<SqlStringAttribute<T>>(sgf,ssf);
+}
+
+template<typename T>
+std::shared_ptr<SqlAttribute<T>> makeBlobAttr(SizeGetterFunc<T> sgf,
+		BlobGetterFunc<T> bgf, BlobSetterFunc<T> bsf ) {
+	return std::make_shared<SqlBlobAttribute<T>>(sgf,bgf,bsf);
 }
 
 template<typename S, typename T>
@@ -180,19 +241,31 @@ std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i, SweetqlFlags f,
 		typename std::enable_if<std::is_integral<S>::value, S>::type = 0) {
-	return std::make_shared<SqlIntAttribute<T>>(i, f);
+	return std::make_shared<SqlIntAttribute<T,S>>(i, f);
 }
 
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i, SweetqlFlags f,
 		typename std::enable_if<std::is_floating_point<S>::value, S>::type = 0) {
-	return std::make_shared<SqlFloatAttribute<T>>(i, f);
+	return std::make_shared<SqlFloatAttribute<T,S>>(i, f);
 }
 
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i, SweetqlFlags f,
 		typename std::enable_if<std::is_same<S,std::string>::value, S>::type = "") {
-	return std::make_shared<SqlStringAttribute<T>>(i, f);
+	static StringGetterFunc<T> sgf = [i]( const T& t ) -> std::string {
+		return t.*i;
+	};
+	static StringSetterFunc<T> ssf = [i]( const T& t, const char* s ) {
+		t.*i = s;
+	};
+	return std::make_shared<SqlStringAttribute<T>>(sgf, ssf, f);
+}
+
+template<typename T>
+std::shared_ptr<SqlAttribute<T>> makeStringAttr(StringGetterFunc<T> sgf, 
+		StringSetterFunc<T> ssf, SweetqlFlags f) {
+	return std::make_shared<SqlStringAttribute<T>>(sgf, ssf, f);
 }
 
 template<typename S, typename T>

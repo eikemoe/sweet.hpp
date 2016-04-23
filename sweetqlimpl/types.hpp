@@ -212,7 +212,7 @@ std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 	static StringGetterFunc<T> sgf = [i]( const T& t ) -> std::string {
 		return t.*i;
 	};
-	static StringSetterFunc<T> ssf = [i]( const T& t, const char* s ) {
+	static StringSetterFunc<T> ssf = [i]( T& t, const char* s ) {
 		t.*i = s;
 	};
 	return std::make_shared<SqlStringAttribute<T>>(sgf,ssf);

@@ -141,6 +141,13 @@ public:
 		}
 	}
 
+	inline Sqlite3& operator=(const Sqlite3& other) {
+		sqlite3_close(db);
+		this->dbName = other.dbName;
+		sqlite3_open(dbName.c_str(), &db);
+		return *this;
+	};
+
 	inline ~Sqlite3() {
 		sqlite3_close(db);
 	}

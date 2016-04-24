@@ -80,6 +80,11 @@ public:
 		return this->impl. template join<S,T,R>(where);
 	}
 
+protected:
+	inline void setImpl(Impl& i) {
+		this->impl = i;
+	}
+
 private:
 
 	Impl& impl;

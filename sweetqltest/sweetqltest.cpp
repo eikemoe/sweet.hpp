@@ -217,6 +217,90 @@ UNITTEST(drop_non_existing_table) {
 	db.dropTable<Person>();
 }
 
+template<typename T, size_t N>
+inline size_t arraylen( const T (&)[N]) { return N; }
+
+struct ComplexThing {
+	static constexpr size_t MAX_BLOB_LEN = 255;
+
+	ComplexThing()
+	{}
+
+	ComplexThing( const std::string& name, const void* b, size_t len )
+		: name( name )
+	{
+		this->setBlob( b, len );
+	}
+
+
+	std::string name;
+	uint8_t blob[MAX_BLOB_LEN];
+	size_t blobLen;
+
+private:
+	const uint8_t* getBlob() const {
+		return this->blob;
+	}
+
+	void setBlob( const void* src, size_t len ) {
+		len = len < MAX_BLOB_LEN ? len : MAX_BLOB_LEN;
+		std::memcpy(this->blob, src, len);
+		this->blobLen = len;
+	}
+
+public:
+	bool operator==( const ComplexThing& other ) const {
+		if ( this->name != other.name or this->blobLen != other.blobLen ) {
+			return false;
+		}
+		size_t len( this->blobLen < MAX_BLOB_LEN ? this->blobLen : MAX_BLOB_LEN );
+		const uint8_t* my_it{ this->blob };
+		const uint8_t* ot_it{ other.blob };
+		for ( size_t i = 0; i < len; ++i, ++my_it, ++ot_it ) {
+			if ( *my_it != *ot_it ) return false;
+		}
+		return true;
+	}
+
+	static SqlTable<ComplexThing>& table() {
+		using namespace std::placeholders;
+		static auto tab = SqlTable<ComplexThing>::sqlTable("ComplexThings",
+				SqlColumn<ComplexThing>("name", makeAttr(&ComplexThing::name, 
+						SweetqlFlags::PrimaryKey)),
+				SqlColumn<ComplexThing>("blob", makeBlobAttr<ComplexThing>(
+						// for the length: we may use a lambda
+						[](const ComplexThing& c) -> size_t {
+							return c.blobLen;
+						},
+						// the getter: we may use a bind
+						std::bind(&ComplexThing::getBlob,_1),
+						// the setter: we may use a member function
+						&ComplexThing::setBlob
+						))
+				);
+		return tab;
+	}
+};
+
+UNITTEST(blob_and_string_attr) {
+	Sqlite3 dbImpl(":memory:");
+	SweetQL<Sqlite3> db(dbImpl);
+	db.createTable<ComplexThing>();
+
+	const char* testname1 = "HELLO WORLD!";
+	const uint8_t testblob1[] = {0,1,2,3,4,5,6,7,8,9,10,11};
+
+	ComplexThing ct1{ testname1, testblob1, arraylen( testblob1 ) };
+
+	db.insert( ct1 );
+
+	auto sel = db.select<ComplexThing>();
+	std::for_each( sel.first, sel.second, [&]( const ComplexThing& p ) {
+			AS_T( p.name == ct1.name );
+			AS_T( p == ct1 );
+	} );
+}
+
 UNITTEST(sweetqltest) {
 	/*remove("testtable2.db");
 	Sqlite3 dbImpl("testtable2.db");

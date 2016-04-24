@@ -126,7 +126,7 @@ public:
 	inline std::string getString(const T& t) const { 
 		return sgf(t);
 	}
-	inline void setString(T& t,const char* s) {
+	inline void setString(T& t, const char* s) {
 		ssf(t, s);
 	}
 private:
@@ -168,7 +168,7 @@ private:
 	U T::* fl;
 };
 
-template<typename T/*, typename U*/>
+template<typename T>
 class SqlBlobAttribute : public SqlAttribute<T> {
 public:
 	inline SqlBlobAttribute(SizeGetterFunc<T> sgf,
@@ -186,12 +186,12 @@ public:
 		return nullptr; // XXX use flags for this?
 	}
 	inline virtual void setBlob(T& t,const void* src,size_t count) {
-		this->bsf(t,src,count);
+		this->bsf(t, src, count);
 	}
 private:
-	SizeGetterFunc<T> sgf;
-	BlobGetterFunc<T> bgf;
-	BlobSetterFunc<T> bsf;
+	SizeGetterFunc<T> sgf; // function to get length of the blob
+	BlobGetterFunc<T> bgf; // function to get the blob
+	BlobSetterFunc<T> bsf; // function to set the blob
 };
 
 template<typename S, typename T>
@@ -209,13 +209,10 @@ std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i,
 		typename std::enable_if<std::is_same<S,std::string>::value, S>::type = "") {
-	static StringGetterFunc<T> sgf = [i]( const T& t ) -> std::string {
-		return t.*i;
-	};
-	static StringSetterFunc<T> ssf = [i]( T& t, const char* s ) {
-		t.*i = s;
-	};
-	return std::make_shared<SqlStringAttribute<T>>(sgf,ssf);
+	return std::make_shared<SqlStringAttribute<T>>(
+			[i](const T& t){ return t.*i; },
+			[i](T& t, const char* s){ t.*i = s; }
+			);
 }
 
 template<typename T>
@@ -226,8 +223,8 @@ std::shared_ptr<SqlAttribute<T>> makeStringAttr( StringGetterFunc<T> sgf,
 
 template<typename T>
 std::shared_ptr<SqlAttribute<T>> makeBlobAttr(SizeGetterFunc<T> sgf,
-		BlobGetterFunc<T> bgf, BlobSetterFunc<T> bsf ) {
-	return std::make_shared<SqlBlobAttribute<T>>(sgf,bgf,bsf);
+		BlobGetterFunc<T> bgf, BlobSetterFunc<T> bsf) {
+	return std::make_shared<SqlBlobAttribute<T>>( sgf, bgf, bsf );
 }
 
 template<typename S, typename T>
@@ -253,13 +250,10 @@ std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i, SweetqlFlags f,
 template<typename S, typename T>
 std::shared_ptr<SqlAttribute<T>> makeAttr(S T::* i, SweetqlFlags f,
 		typename std::enable_if<std::is_same<S,std::string>::value, S>::type = "") {
-	static StringGetterFunc<T> sgf = [i]( const T& t ) -> std::string {
-		return t.*i;
-	};
-	static StringSetterFunc<T> ssf = [i]( T& t, const char* s ) {
-		t.*i = s;
-	};
-	return std::make_shared<SqlStringAttribute<T>>(sgf, ssf, f);
+	return std::make_shared<SqlStringAttribute<T>>(
+			[i](const T& t){ return t.*i; },
+			[i](T& t, const char* s){ t.*i = s; },
+			f);
 }
 
 template<typename T>

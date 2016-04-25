@@ -288,7 +288,7 @@ UNITTEST(blob_and_string_attr) {
 	const char* testname1 = "HELLO WORLD!";
 	const uint8_t testblob1[] = {0,1,2,3,4,5,6,7,8,9,10,11};
 
-	ComplexThing ct1{testname1, testblob1, arraylen( testblob1 )};
+	ComplexThing ct1{testname1, testblob1, arraylen(testblob1)};
 
 	db.insert(ct1);
 
@@ -307,20 +307,20 @@ UNITTEST(access_to_deleted_string) {
 			std::array<uint16_t,8>()
 		{
 			static const size_t MIN_LEN = 5 * this->size() - 1;
-			if ( s.size() >= MIN_LEN ) {
-				for ( size_t i=0; i<this->size(); ++i ){
-					this->operator[]( i ) = std::stoi( s.substr( 5*i, 4 ), nullptr, 16 );
+			if(s.size() >= MIN_LEN) {
+				for(size_t i=0; i<this->size(); ++i){
+					this->operator[]( i ) = std::stoi(s.substr(5*i, 4), nullptr, 16);
 				}
 			} else {
-				this->fill( 0 );
+				this->fill(0);
 			}
 		}
 
 		std::string toString() const {
 			std::stringstream ss;
 			ss << std::hex;
-			for ( size_t i=0; i<this->size(); ++i ){
-				if ( i > 0 ) ss << ':';
+			for(size_t i=0; i<this->size(); ++i){
+				if(i > 0) ss << ':';
 				ss << static_cast<int>(this->operator[](i));
 			}
 			return ss.str();
@@ -329,7 +329,7 @@ UNITTEST(access_to_deleted_string) {
 		static SqlTable<IPV6>& table() {
 			static auto tab = SqlTable<IPV6>::sqlTable("TestTable",
 					SqlColumn<IPV6>("s", makeStringAttr<IPV6>(
-							[](const IPV6& t ) -> std::string { return t.toString(); },
+							[](const IPV6& t) -> std::string { return t.toString(); },
 							[](IPV6& t, const std::string& s) { t = IPV6(s); },
 							SweetqlFlags::PrimaryKey))
 					);
@@ -341,11 +341,11 @@ UNITTEST(access_to_deleted_string) {
 	SweetQL<Sqlite3> db(dbImpl);
 	db.createTable<IPV6>();
 
-	IPV6 t1( "1111:2222:3333:4444:5555:6666:7777:8888" );
+	IPV6 t1("1111:2222:3333:4444:5555:6666:7777:8888");
 	db.insert(t1);
 
 	{
-		IPV6 p( t1 );
+		IPV6 p(t1);
 		AS_T(p.toString() == t1.toString()); // normal copy works
 	}
 

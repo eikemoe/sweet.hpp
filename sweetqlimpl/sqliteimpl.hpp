@@ -347,7 +347,7 @@ private:
 				case SweetqlTypes::String: {
 					const std::string ref = c.attr->getString(t);
 					sqlite3_bind_text(stmt, i++, ref.c_str(), ref.size(),
-						SQLITE_STATIC);
+						SQLITE_TRANSIENT);
 					break;
 				}
 				default: {

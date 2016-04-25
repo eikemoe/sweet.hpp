@@ -299,6 +299,64 @@ UNITTEST(blob_and_string_attr) {
 	});
 }
 
+UNITTEST(access_to_deleted_string) {
+	struct IPV6 : public std::array<uint16_t,8> {
+		constexpr IPV6() : std::array<uint16_t,8>() {}
+
+		IPV6(const std::string& s) :
+			std::array<uint16_t,8>()
+		{
+			static const size_t MIN_LEN = 5 * this->size() - 1;
+			if ( s.size() >= MIN_LEN ) {
+				for ( size_t i=0; i<this->size(); ++i ){
+					this->operator[]( i ) = std::stoi( s.substr( 5*i, 4 ), nullptr, 16 );
+				}
+			} else {
+				this->fill( 0 );
+			}
+		}
+
+		std::string toString() const {
+			std::stringstream ss;
+			ss << std::hex;
+			for ( size_t i=0; i<this->size(); ++i ){
+				if ( i > 0 ) ss << ':';
+				ss << static_cast<int>(this->operator[](i));
+			}
+			return ss.str();
+		}
+
+		static SqlTable<IPV6>& table() {
+			static auto tab = SqlTable<IPV6>::sqlTable("TestTable",
+					SqlColumn<IPV6>("s", makeStringAttr<IPV6>(
+							[](const IPV6& t ) -> std::string { return t.toString(); },
+							[](IPV6& t, const std::string& s) { t = IPV6(s); },
+							SweetqlFlags::PrimaryKey))
+					);
+			return tab;
+		}
+	};
+
+	Sqlite3 dbImpl(":memory:");
+	SweetQL<Sqlite3> db(dbImpl);
+	db.createTable<IPV6>();
+
+	IPV6 t1( "1111:2222:3333:4444:5555:6666:7777:8888" );
+	db.insert(t1);
+
+	{
+		IPV6 p( t1 );
+		AS_T(p.toString() == t1.toString()); // normal copy works
+	}
+
+	// getting from db does not work
+	auto sel = db.select<IPV6>();
+	std::for_each(sel.first, sel.second, [&](const IPV6& p) {
+			//std::cout << p.toString() << "==" << t1.toString() << std::endl;
+			AS_T(p.toString() == t1.toString());
+	});
+}
+
 UNITTEST(sweetqltest) {
 	/*remove("testtable2.db");
 	Sqlite3 dbImpl("testtable2.db");

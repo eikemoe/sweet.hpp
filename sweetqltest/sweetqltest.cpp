@@ -357,6 +357,23 @@ UNITTEST(access_to_deleted_string) {
 	});
 }
 
+UNITTEST(double_insert) {
+	Sqlite3 dbImpl(":memory:");
+	SweetQL<Sqlite3> db(dbImpl);
+	db.createTable<ComplexThing>();
+
+	const char* testname1 = "HELLO WORLD!";
+	const uint8_t testblob1[] = {0};
+
+	ComplexThing ct1{testname1, testblob1, arraylen(testblob1)};
+
+	db.insert(ct1);
+	db.insert(ct1, true);
+
+	auto sel = db.select<ComplexThing>();
+	AS_T(std::distance(sel.first, sel.second) == 1);
+}
+
 UNITTEST(sweetqltest) {
 	/*remove("testtable2.db");
 	Sqlite3 dbImpl("testtable2.db");

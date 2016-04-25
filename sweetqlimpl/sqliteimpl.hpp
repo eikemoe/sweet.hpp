@@ -153,11 +153,14 @@ public:
 	}
 
 	template<typename S>
-	inline static const std::string prepareStatment() {
+	inline static const std::string prepareStatment(bool orIgnore=false) {
 		const SqlTable<S>& tab = S::table();
 		std::stringstream stmtStr;
-		stmtStr<<"INSERT INTO ";
-		stmtStr<<tab.name<<"(";
+		stmtStr<<"INSERT ";
+		if(orIgnore) {
+			stmtStr<<"OR IGNORE ";
+		}
+		stmtStr<<"INTO "<<tab.name<<"(";
 		size_t numColumn = tab.column.size()-1;
 		for(size_t i = 0; i < numColumn; ++i) {
 			stmtStr<<tab.column[i].attrName<<',';
@@ -172,9 +175,9 @@ public:
 	}
 
 	template<typename S>
-	inline bool insert(S& t) {
+	inline bool insert(S& t, bool orIgnore=false) {
 		SqlTable<S>& tab = S::table();
-		const std::string stmtStr(prepareStatment<S>());
+		const std::string stmtStr(prepareStatment<S>(orIgnore));
 		sqlite3_stmt* stmt;
 		sqlite3_prepare_v2(db, stmtStr.c_str(), stmtStr.size(), &stmt, NULL);
 		addParameter(t, tab, stmt);
@@ -189,9 +192,9 @@ public:
 	}
 
 	template<typename S, typename It>
-	inline bool insert(It be, It en) {
+	inline bool insert(It be, It en, bool orIgnore=false) {
 		SqlTable<S>& tab = S::table();
-		const std::string stmtStr(prepareStatment<S>());
+		const std::string stmtStr(prepareStatment<S>(orIgnore));
 		sqlite3_stmt* stmt;
 		char* errorMessage;
 		sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);

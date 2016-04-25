@@ -30,13 +30,13 @@ public:
 	}
 
 	template<typename S>
-	bool insert(S& t) {
-		return this->impl. template insert<S>(t);
+	bool insert(S& t, bool orIgnore=false) {
+		return this->impl. template insert<S>(t, orIgnore);
 	}
 
 	template<typename S, typename It>
-	bool insert(It be, It en) {
-		return this->impl. template insert<S>(be, en);
+	bool insert(It be, It en, bool orIgnore=false) {
+		return this->impl. template insert<S>(be, en, orIgnore);
 	}
 
 	template<typename S>

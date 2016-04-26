@@ -14,7 +14,7 @@ public:
 		typedef T value_type;
 		typedef T& reference;
 		typedef T* pointer;
-		typedef std::forward_iterator_tag iterator_category;
+		typedef std::input_iterator_tag iterator_category;
 		typedef int difference_type;
 
 		inline Iterator() : sqlRsltCode(SQLITE_DONE) {}

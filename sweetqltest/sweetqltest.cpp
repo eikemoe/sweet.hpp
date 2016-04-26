@@ -374,6 +374,37 @@ UNITTEST(double_insert) {
 	AS_T(std::distance(sel.first, sel.second) == 1);
 }
 
+UNITTEST(db_to_vector) {
+	struct Ding {
+		std::string s;
+
+		static SqlTable<Ding>& table() {
+			static SqlTable<Ding> tab = SqlTable<Ding>::sqlTable("Ding",
+				SqlColumn<Ding>("s", 	makeAttr(&Ding::s, SweetqlFlags::PrimaryKey))
+			);
+			return tab;
+		}
+	};
+	Sqlite3 dbImpl(":memory:");
+	SweetQL<Sqlite3> db(dbImpl);
+	db.createTable<Ding>();
+
+	std::vector<Ding> inDingse{
+		{"bla"},
+		{"foo"},
+		{"bar"},
+		{"blup"},
+		{"asdf"}
+	};
+	db.insert<Ding>(inDingse.begin(), inDingse.end());
+
+	auto sel(db.select<Ding>());
+
+	std::vector<Ding> outDingse(sel.first, sel.second);
+
+	AS_T(outDingse.size() == inDingse.size());
+}
+
 UNITTEST(sweetqltest) {
 	/*remove("testtable2.db");
 	Sqlite3 dbImpl("testtable2.db");
